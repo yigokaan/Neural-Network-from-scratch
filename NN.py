@@ -29,12 +29,12 @@ class NN:
 
 
         
-    def add_layer(self,neurons,activation_function,weights = 0):
+    def add_layer(self,neurons,activation_function,weights = 0,biases = 0):
         if len(self.layers) == 0:
-            Added = layer(neurons,activation_function,self.inputs,weights)
+            Added = layer(neurons,activation_function,self.inputs,weights,biases)
             self.layers.append(Added)
         else:
-            Added = layer(neurons,activation_function,self.layers[-1].neurons,weights)
+            Added = layer(neurons,activation_function,self.layers[-1].neurons,weights,biases)
             self.layers.append(Added)
         activation_function = activation_function.lower()
         if activation_function == "sigmoid":
@@ -62,14 +62,14 @@ class NN:
         self.Neural_data.append(Layer_output)
 
     
-    #save and load 
+    
     def Save(self,name):
         NN_weights = []
         NN_biases = []
         NN_acts = []    
         for Layer in self.layers:
-            NN_weights.append(Layer.weights)
-            NN_biases.append(Layer.biases)
+            NN_weights.append(Layer.weights.tolist())
+            NN_biases.append(Layer.biases.tolist())
             NN_acts.append(Layer.activation_function)
         dumping_data = {
             "weights": NN_weights,
@@ -82,12 +82,12 @@ class NN:
 
 
     def Load(self,name):
-       with open("saf_python_verileri.json", "r", encoding="utf-8") as f:
+       with open(name+".json", "r", encoding="utf-8") as f:
          data = json.load(f)
        self.inputs = len(data["weights"][0])
        y = 0
        for x in data["biases"]:
-        self.add_layer(len(x),data["activation_functions"][y],weights = data["weights"][y])
+        self.add_layer(len(x),data["activation_functions"][y],weights = np.array(data["weights"][y]),biases=x)
         y += 1 
 
 
@@ -103,12 +103,15 @@ class NN:
 
         
 class layer:
-    def __init__(self, neurons, activation_function,Previous,weights):
+    def __init__(self, neurons, activation_function,Previous,weights,biases):
         self.neurons = neurons
         self.activation_function = activation_function
-        self.biases = np.random.random(neurons)
-        if weights == 0:
-         self.weights = np.random.random((neurons,Previous))
+
+        if type(weights) is int:
+          self.weights = np.random.random((neurons,Previous))
+          self.biases = np.random.random(neurons)
         else:
            self.weights = weights
-
+           self.biases = biases
+        
+    
