@@ -130,10 +130,6 @@ class NN:
         self.layers[xth_layer].biases += (np.array(self.gradients[xth_layer]))*self.learning_rate*(-1)
 
 
-          
-          
-       
-       
         
 class layer:
     def __init__(self, neurons, activation_function,Previous,weights,biases):
