@@ -2,25 +2,26 @@ import numpy as np
 import json
 import mnist
 import time
-
 print("//starting//")
+
 
 def PreSoftmax(self,x):
     self.Softmax_activated = True
     return x
    
 def Softmax(array):
+    max = np.max(array)
     total = 0
-    num = 0
     for x in array:
-        total += np.e**x
+        total += np.exp(x - max)
     for x in range(len(array)):
-        array[num] = np.e**x / total
-        num += 1
+        array[x] = np.exp(array[x] - max) / total
     return array
+
+
 #temporary
-def Softmax_derivative(x):
-    return x
+def Softmax_derivative(p):
+    return np.diag(p) - np.outer(p, p)
 
 
 def sigmoid(z):
@@ -28,38 +29,39 @@ def sigmoid(z):
     
 
 def Relu(z):
-    if z > 0:
-       return z
-    else:
-        return 0
+    return (z * (z > 0))
 
 def sigmoid_derivative(z):
-    return (1/( 1 + np.e**-z)) * (1-1/( 1 + np.e**-z))
+    s = 1 / (1 + np.exp(-np.clip(z, -500, 500)))
+    return s * (1 - s)
 
 def Relu_derivative(z):
-    if z > 0:
-       return 1
+    return (z > 0)
+
+
+def prediction_accuracy(output,labels):
+    if np.argmax(output) == np.argmax(labels):
+        return 1
     else:
         return 0
-
 
 class NN:
     def __init__(self,inputs):
         self.layers = []
         self.inputs = inputs
-        self.learning_rate = 0.1
+        self.learning_rate = 0.00005
         self.Softmax_activated = False
 
 
         
-    def add_layer(self,neurons,activation_function,weights = 0,biases = 0):
+    def add_layer(self,neurons,activation_function,weights = 0,biases = 0,initialization = "xavier",uniform=False):
+        activation_function = activation_function.lower()
         if len(self.layers) == 0:
-            Added = layer(neurons,activation_function,self.inputs,weights,biases)
+            Added = layer(neurons,activation_function,self.inputs,weights,biases,initialization,uniform)
             self.layers.append(Added)
         else:
-            Added = layer(neurons,activation_function,self.layers[-1].neurons,weights,biases)
+            Added = layer(neurons,activation_function,self.layers[-1].neurons,weights,biases,initialization,uniform)
             self.layers.append(Added)
-        activation_function = activation_function.lower()
         if activation_function == "sigmoid":
             setattr(Added,"activation_func",sigmoid)
             setattr(Added,"activation_derivative",sigmoid_derivative)
@@ -67,7 +69,7 @@ class NN:
             setattr(Added,"activation_func",Relu)
             setattr(Added,"activation_derivative",Relu_derivative)
         elif activation_function == "softmax":        
-            setattr(Added,"activation_func",lambda x :PreSoftmax(Added,x))
+            setattr(Added,"activation_func",lambda x :PreSoftmax(self,x))
             setattr(Added,"activation_derivative",Softmax_derivative)
 
 
@@ -85,7 +87,6 @@ class NN:
         pre_out = []
         number = 0
         Activated_layer = self.layers[Activated_layer_number]
-        print("BIASES:", Activated_layer.biases[3])
         while number != Activated_layer.neurons:
             pre_act = self.Neuron_activator(Activated_layer_number,number)
             pre_out.append(pre_act)
@@ -146,35 +147,52 @@ class NN:
     def Back_propagation(self,output_number):
        self.Weights_delta = []
        num = 0
-       print("/////////")
-       print(np.array(self.Neural_data[-1]))
        #Planning to turn the loss function derivative inside to self.loss() to make it modifiable
-       print(self.training_data[output_number])
        k = 2 * (
-          np.array(self.Neural_data[-1], dtype=float)
-          - np.array(self.training_data[output_number], dtype=float))
-       print("loss") 
-       print(sum(k**2))
-       for x in k:
+          np.array(self.Neural_data[-1])
+          - np.array(self.training_data[output_number]))
+       """
+       if not self.layers[-1].activation_function == "softmax":
+        for x in k:
            k[num] = x * self.layers[-1].activation_derivative(self.PreNeural_data[-1][num])
            num += 1
+       else:
+           k = self.layers[-1].activation_derivative(
+            self.PreNeural_data[-1]) @ k"""
        self.gradients = [k]
        layer_numberp1 = len(self.layers)
        y = 1
        while y != layer_numberp1:
           self.Gradient_descent(-y-1)
           y += 1
+       self.gradients.reverse()
        y = 1
-       while y != layer_numberp1:
+       while y != layer_numberp1+1:
           self.weight_change(-y)
           self.bias_change(-y)
           y += 1
 
+       self.total_prediction_accuracy += prediction_accuracy(self.Neural_data[-1],self.training_data[output_number])
+       self.tries += 1
+       if self.tries == 100:
+           print(self.total_prediction_accuracy)
+           self.tries = 0
+           self.total_prediction_accuracy = 0
+           print(self.average_loss/100)
+           self.average_loss = 0
+       self.average_loss += sum(k**2)
+       #print("Loss:", sum(k**2))
+       #print("OUTPUT:", self.Neural_data[-1])
+       #print("TARGET:", self.training_data[output_number])
+       #time.sleep(1)
+
 
     def weight_change(self,xth_layer):
           self.layers[xth_layer].weights += np.outer(np.array(self.gradients[xth_layer]),np.array(self.Neural_data[xth_layer-1]))*self.learning_rate*(-1)
+          #print(np.outer(np.array(self.gradients[xth_layer]),np.array(self.Neural_data[xth_layer-1]))*self.learning_rate*(-1))
+          #print(self.Neural_data[xth_layer-1])
+          #time.sleep(1)
 
-    
     def bias_change(self,xth_layer):
         self.layers[xth_layer].biases += (np.array(self.gradients[xth_layer]))*self.learning_rate*(-1)
 
@@ -182,22 +200,43 @@ class NN:
     def Train(self,input_data,output_data):
         self.training_data = output_data
         k = 0
+        self.total_prediction_accuracy,self.tries,self.average_loss = 0,0,0
+  
         for x in input_data:
             self.forward_pass(np.array(x).flatten())
             self.Back_propagation(k)
             k += 1
+
+    def Output(self):
+        print("Underwork-this class is for ")
+
            
        
        
         
 class layer:
-    def __init__(self, neurons, activation_function,Previous,weights,biases):
+    def __init__(self, neurons, activation_function,Previous,weights,biases,initialization,uniform):
         self.neurons = neurons
         self.activation_function = activation_function
-
-        if type(weights) is int:
-          self.weights = np.random.random((neurons,Previous))   
-          self.biases = np.random.random(neurons)
+       
+        if type(weights) is int: 
+          if initialization == "xavier":
+            if uniform == False:
+                    std = np.sqrt(2 / neurons + Previous)
+                    self.weights = np.random.normal(0,std,(neurons,Previous))
+            else:
+                    std = np.sqrt(6 / neurons + Previous)
+                    self.weights = np.random.uniform(-std,std,(neurons,Previous))
+              
+          elif initialization == "he":
+            if uniform == False:
+                    std = np.sqrt(2 / Previous)
+                    self.weights = np.random.normal(0,std,(neurons,Previous))
+            else:
+                    std = np.sqrt(6 / Previous)
+                    self.weights = np.random.uniform(-std,std,(neurons,Previous))
+                      
+          self.biases = np.zeros(neurons)
         else:
            self.weights = weights
            self.biases = biases
